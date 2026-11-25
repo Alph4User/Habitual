@@ -2,26 +2,35 @@
 
 import * as React from 'react'
 import { format, startOfWeek, addDays } from 'date-fns'
-import { ChevronLeft, ChevronRight, Check, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, RotateCcw, Settings2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { useHabitMatrix } from '@/hooks/use-data'
-import { getDayNumber, formatDate, getStoredData, saveData, HabitMatrix } from '@/lib/storage'
+import { getDayNumber, formatDate, getHabits, saveHabits, HabitMatrix, HabitDefinition } from '@/lib/storage'
+import { ManageHabitsDialog } from '@/components/manage-habits-dialog'
 
-const DEFAULT_HABITS = [
-  { id: 'prayer', label: 'Prayer (5x daily)', icon: '🕌' },
-  { id: 'workout', label: 'Workout', icon: '💪' },
-  { id: 'reading', label: 'Reading / Learning', icon: '📚' },
-  { id: 'savings', label: 'Savings', icon: '💰' },
-  { id: 'journaling', label: 'Journaling', icon: '📝' },
-  { id: 'sleep', label: 'Sleep Discipline', icon: '😴' },
-]
+const emptyWeek = (habits: HabitDefinition[]) =>
+  habits.reduce((acc, habit) => {
+    acc[habit.id] = [false, false, false, false, false, false, false]
+    return acc
+  }, {} as Record<string, boolean[]>)
 
 export default function HabitsPage() {
   const [currentWeekOffset, setCurrentWeekOffset] = React.useState(0)
   const { data, loading, updateHabitMatrix } = useHabitMatrix()
+  const [habits, setHabits] = React.useState<HabitDefinition[]>([])
+  const [manageOpen, setManageOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    if (data) setHabits(getHabits(data))
+  }, [data])
+
+  const handleSaveHabits = (next: HabitDefinition[]) => {
+    saveHabits(next)
+    setHabits(next)
+  }
 
   const today = React.useMemo(() => new Date(), [])
   const currentWeekStart = React.useMemo(
@@ -37,29 +46,14 @@ export default function HabitsPage() {
     [currentWeekStart]
   )
 
-  // Get or create habit matrix for this week
+  // Get or create habit matrix for this week (looked up by the week's Monday)
   const getWeekMatrix = React.useCallback((): HabitMatrix => {
-    if (!data) {
-      return {
-        weekNumber: displayWeekNumber,
-        startDate: currentWeekStartStr,
-        habits: DEFAULT_HABITS.reduce((acc, habit) => {
-          acc[habit.id] = [false, false, false, false, false, false, false]
-          return acc
-        }, {} as Record<string, boolean[]>),
-      }
-    }
-
-    const existing = data.habitMatrix.find(h => h.weekNumber === displayWeekNumber)
+    const existing = data?.habitMatrix.find(h => h.startDate === currentWeekStartStr)
     if (existing) return existing
-
     return {
       weekNumber: displayWeekNumber,
       startDate: currentWeekStartStr,
-      habits: DEFAULT_HABITS.reduce((acc, habit) => {
-        acc[habit.id] = [false, false, false, false, false, false, false]
-        return acc
-      }, {} as Record<string, boolean[]>),
+      habits: {},
     }
   }, [data, displayWeekNumber, currentWeekStartStr])
 
@@ -74,8 +68,8 @@ export default function HabitsPage() {
       ...matrix,
       habits: {
         ...matrix.habits,
-        [habitId]: matrix.habits[habitId].map((val, idx) =>
-          idx === dayIndex ? !val : val
+        [habitId]: (matrix.habits[habitId] ?? [false, false, false, false, false, false, false]).map(
+          (val, idx) => (idx === dayIndex ? !val : val)
         ),
       },
     }
@@ -86,22 +80,23 @@ export default function HabitsPage() {
   const resetWeek = () => {
     const newMatrix = {
       ...matrix,
-      habits: DEFAULT_HABITS.reduce((acc, habit) => {
-        acc[habit.id] = [false, false, false, false, false, false, false]
-        return acc
-      }, {} as Record<string, boolean[]>),
+      habits: emptyWeek(habits),
     }
     setMatrix(newMatrix)
     updateHabitMatrix(newMatrix)
   }
 
   // Calculate stats
-  const totalChecks = Object.values(matrix.habits).flat().filter(Boolean).length
-  const totalPossible = DEFAULT_HABITS.length * 7
-  const completionPercent = Math.round((totalChecks / totalPossible) * 100)
+  // Only count habits that are currently active
+  const totalChecks = habits.reduce(
+    (sum, h) => sum + (matrix.habits[h.id]?.filter(Boolean).length || 0),
+    0
+  )
+  const totalPossible = habits.length * 7
+  const completionPercent = totalPossible ? Math.round((totalChecks / totalPossible) * 100) : 0
 
   // Calculate per-habit stats
-  const habitStats = DEFAULT_HABITS.map(habit => {
+  const habitStats = habits.map(habit => {
     const completed = matrix.habits[habit.id]?.filter(Boolean).length || 0
     return { ...habit, completed, percent: Math.round((completed / 7) * 100) }
   })
@@ -119,6 +114,21 @@ export default function HabitsPage() {
 
   return (
     <div className="space-y-6">
+      <ManageHabitsDialog
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        habits={habits}
+        onSave={handleSaveHabits}
+      />
+
+      {habits.length === 0 && (
+        <Card className="border-border/50">
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            No habits yet. Click <span className="font-medium text-foreground">Manage</span> to add one.
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -151,12 +161,22 @@ export default function HabitsPage() {
             <ChevronRight className="h-4 w-4" />
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setManageOpen(true)}
+            className="ml-2 gap-2"
+          >
+            <Settings2 className="h-3 w-3" />
+            Manage
+          </Button>
+
           {isCurrentWeek && (
             <Button 
               variant="outline" 
               size="sm"
               onClick={resetWeek}
-              className="ml-2 gap-2"
+              className="gap-2"
             >
               <RotateCcw className="h-3 w-3" />
               Reset
@@ -211,7 +231,7 @@ export default function HabitsPage() {
               </div>
 
               {/* Habit Rows */}
-              {DEFAULT_HABITS.map((habit) => (
+              {habits.map((habit) => (
                 <div 
                   key={habit.id}
                   className="grid grid-cols-[1fr_repeat(7,_minmax(50px,_1fr))] gap-2 py-3 border-t border-border/50"

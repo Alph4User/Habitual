@@ -116,8 +116,24 @@ export interface Goals {
   startDate: string
 }
 
+export interface HabitDefinition {
+  id: string
+  label: string
+  icon: string
+}
+
+export const DEFAULT_HABITS: HabitDefinition[] = [
+  { id: 'prayer', label: 'Prayer (5x daily)', icon: '🕌' },
+  { id: 'workout', label: 'Workout', icon: '💪' },
+  { id: 'reading', label: 'Reading / Learning', icon: '📚' },
+  { id: 'savings', label: 'Savings', icon: '💰' },
+  { id: 'journaling', label: 'Journaling', icon: '📝' },
+  { id: 'sleep', label: 'Sleep Discipline', icon: '😴' },
+]
+
 export interface AppData {
   goals: Goals | null
+  habits?: HabitDefinition[] // custom habit list; falls back to DEFAULT_HABITS
   journals: JournalEntry[]
   weeklyReviews: WeeklyReview[]
   monthlyReviews: MonthlyReview[]
@@ -189,7 +205,7 @@ export function resetAllData(): void {
 export function getStartDate(): Date {
   const data = getStoredData()
   if (data.goals?.startDate) {
-    return new Date(data.goals.startDate)
+    return parseLocalDate(data.goals.startDate)
   }
   return new Date()
 }
@@ -198,14 +214,34 @@ export function getDayNumber(date: Date = new Date()): number {
   const data = getStoredData()
   if (!data.goals?.startDate) return 1
   
-  const startDate = new Date(data.goals.startDate)
-  const diffTime = date.getTime() - startDate.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1
+  const startDate = parseLocalDate(data.goals.startDate)
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.round((day.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
   return Math.max(1, Math.min(180, diffDays))
 }
 
+// Local-time YYYY-MM-DD (toISOString would use UTC and shift the date
+// for users ahead of UTC, e.g. 00:00-03:00 in Nairobi became "yesterday")
 export function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Parse a YYYY-MM-DD string as a local date (new Date('YYYY-MM-DD') is UTC)
+export function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+export function getHabits(data: AppData = getStoredData()): HabitDefinition[] {
+  return data.habits ?? DEFAULT_HABITS
+}
+
+export function saveHabits(habits: HabitDefinition[]): void {
+  const data = getStoredData()
+  saveData({ ...data, habits })
 }
 
 export function getJournalEntry(date: string): JournalEntry | undefined {
