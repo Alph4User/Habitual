@@ -19,7 +19,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useAppData } from '@/hooks/use-data'
-import { exportData, importData, resetAllData, Goals, formatDate } from '@/lib/storage'
+import { exportData, importData, resetAllData, Goals, formatDate, parseLocalDate } from '@/lib/storage'
 
 const GOAL_CATEGORIES = [
   { key: 'spiritual', label: 'Spiritual Goal', icon: '🕌', placeholder: 'e.g., Complete reading the Quran, establish all 5 daily prayers...' },
@@ -194,7 +194,7 @@ export default function SettingsPage() {
               <CardContent>
                 <div className="text-center">
                   <p className="text-4xl font-bold text-primary">
-                    {Math.ceil((new Date().getTime() - new Date(goals.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1}
+                    {Math.round((new Date(new Date().setHours(0, 0, 0, 0)).getTime() - parseLocalDate(goals.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1}
                   </p>
                   <p className="text-sm text-muted-foreground">days into your journey</p>
                 </div>
