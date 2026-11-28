@@ -19,7 +19,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useAppData } from '@/hooks/use-data'
-import { exportData, importData, resetAllData, Goals, formatDate, parseLocalDate } from '@/lib/storage'
+import { exportData, importData, resetAllData, Goals, formatDate, parseLocalDate, getStoredData, saveData, DEFAULT_BEDTIME } from '@/lib/storage'
 
 const GOAL_CATEGORIES = [
   { key: 'spiritual', label: 'Spiritual Goal', icon: '🕌', placeholder: 'e.g., Complete reading the Quran, establish all 5 daily prayers...' },
@@ -33,6 +33,16 @@ const GOAL_CATEGORIES = [
 export default function SettingsPage() {
   const { data, loading, saveGoals } = useAppData()
   const [saved, setSaved] = React.useState(false)
+  const [bedtime, setBedtime] = React.useState(DEFAULT_BEDTIME)
+
+  React.useEffect(() => {
+    setBedtime(getStoredData().bedtimeTarget || DEFAULT_BEDTIME)
+  }, [])
+
+  const updateBedtime = (value: string) => {
+    setBedtime(value)
+    if (value) saveData({ ...getStoredData(), bedtimeTarget: value })
+  }
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const [goals, setGoals] = React.useState<Goals>({
@@ -132,6 +142,21 @@ export default function SettingsPage() {
                   value={goals.startDate}
                   onChange={(e) => updateGoal('startDate', e.target.value)}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bedtime target */}
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="text-base">Bedtime Target</CardTitle>
+              <CardDescription>
+                &quot;Slept on time&quot; is ticked automatically when the sleep time in your journal is at or before this.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="max-w-xs">
+                <Input type="time" value={bedtime} onChange={(e) => updateBedtime(e.target.value)} />
               </div>
             </CardContent>
           </Card>

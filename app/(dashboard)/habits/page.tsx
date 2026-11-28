@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 import { useHabitMatrix } from '@/hooks/use-data'
 import { getDayNumber, formatDate, getHabits, saveHabits, HabitMatrix, HabitDefinition } from '@/lib/storage'
 import { ManageHabitsDialog } from '@/components/manage-habits-dialog'
+import { habitStreak } from '@/lib/stats'
+import { getStoredData } from '@/lib/storage'
 
 const emptyWeek = (habits: HabitDefinition[]) =>
   habits.reduce((acc, habit) => {
@@ -98,7 +100,8 @@ export default function HabitsPage() {
   // Calculate per-habit stats
   const habitStats = habits.map(habit => {
     const completed = matrix.habits[habit.id]?.filter(Boolean).length || 0
-    return { ...habit, completed, percent: Math.round((completed / 7) * 100) }
+    const streak = habitStreak(getStoredData(), habit.id)
+    return { ...habit, completed, streak, percent: Math.round((completed / 7) * 100) }
   })
 
   const todayStr = formatDate(today)
@@ -295,13 +298,20 @@ export default function HabitsPage() {
                   habit.percent < 70 && "[&>div]:bg-primary"
                 )}
               />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {habit.percent === 100 
-                  ? "Perfect week!" 
-                  : habit.percent >= 70 
-                    ? "Great progress!" 
-                    : "Keep going!"}
-              </p>
+              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {habit.percent === 100
+                    ? "Perfect week!"
+                    : habit.percent >= 70
+                      ? "Great progress!"
+                      : "Keep going!"}
+                </span>
+                <span className="tabular-nums">
+                  {habit.streak > 0
+                    ? `🔥 ${habit.streak} ${habit.kind === 'quit' ? (habit.streak === 1 ? 'day clean' : 'days clean') : 'day streak'}`
+                    : 'No streak yet'}
+                </span>
+              </div>
             </CardContent>
           </Card>
         ))}
