@@ -120,20 +120,31 @@ export interface HabitDefinition {
   id: string
   label: string
   icon: string
+  /** 'build' = a good habit to do; 'quit' = a bad habit to stay away from */
+  kind?: 'build' | 'quit'
 }
 
+// The 10 commitments. Ids for prayer/reading/workout/sleep are kept from the
+// original defaults so existing history still lines up.
 export const DEFAULT_HABITS: HabitDefinition[] = [
-  { id: 'prayer', label: 'Prayer (5x daily)', icon: '🕌' },
-  { id: 'workout', label: 'Workout', icon: '💪' },
-  { id: 'reading', label: 'Reading / Learning', icon: '📚' },
-  { id: 'savings', label: 'Savings', icon: '💰' },
-  { id: 'journaling', label: 'Journaling', icon: '📝' },
-  { id: 'sleep', label: 'Sleep Discipline', icon: '😴' },
+  { id: 'prayer', label: 'Prayed all 5 Swalah', icon: '🕌', kind: 'build' },
+  { id: 'quran', label: 'Read Quran', icon: '📖', kind: 'build' },
+  { id: 'reading', label: 'Read & studied', icon: '📚', kind: 'build' },
+  { id: 'workout', label: 'Went to the gym', icon: '💪', kind: 'build' },
+  { id: 'sleep', label: 'Slept on time', icon: '😴', kind: 'build' },
+  { id: 'clean-house', label: 'Kept the house clean', icon: '🧹', kind: 'build' },
+  { id: 'priority', label: 'Did my top priority first', icon: '🎯', kind: 'build' },
+  { id: 'moderate-eating', label: 'Ate in moderation', icon: '🍽️', kind: 'quit' },
+  { id: 'boundaries', label: 'Protected my time', icon: '🛑', kind: 'quit' },
+  { id: 'zinaa', label: 'Stayed away from Zinaa', icon: '🛡️', kind: 'quit' },
 ]
+
+export const DEFAULT_BEDTIME = '22:30'
 
 export interface AppData {
   goals: Goals | null
   habits?: HabitDefinition[] // custom habit list; falls back to DEFAULT_HABITS
+  bedtimeTarget?: string // HH:mm; 'Slept on time' is ticked when sleepTime is at or before this
   journals: JournalEntry[]
   weeklyReviews: WeeklyReview[]
   monthlyReviews: MonthlyReview[]
@@ -259,7 +270,80 @@ export function saveJournalEntry(entry: JournalEntry): void {
     data.journals.push(entry)
   }
   
+  applyJournalToHabits(data, entry)
   saveData(data)
+}
+
+// ---- Habit check-ins by date ----
+
+const emptyDays = () => [false, false, false, false, false, false, false]
+
+/** Monday (local) of the week containing `date`, plus the weekday index 0=Mon..6=Sun */
+function weekSlot(dateStr: string): { monday: string; index: number } {
+  const d = parseLocalDate(dateStr)
+  const index = (d.getDay() + 6) % 7
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - index)
+  return { monday: formatDate(monday), index }
+}
+
+export function isHabitDone(data: AppData, dateStr: string, habitId: string): boolean {
+  const { monday, index } = weekSlot(dateStr)
+  const week = data.habitMatrix.find(w => w.startDate === monday)
+  return !!week?.habits[habitId]?.[index]
+}
+
+/** Mutates `data` (does not save) */
+export function setHabitDoneIn(data: AppData, dateStr: string, habitId: string, done: boolean): void {
+  const { monday, index } = weekSlot(dateStr)
+  let week = data.habitMatrix.find(w => w.startDate === monday)
+  if (!week) {
+    week = { weekNumber: Math.ceil(getDayNumber(parseLocalDate(monday)) / 7), startDate: monday, habits: {} }
+    data.habitMatrix.push(week)
+  }
+  const days = week.habits[habitId] ? [...week.habits[habitId]] : emptyDays()
+  days[index] = done
+  week.habits[habitId] = days
+}
+
+export function setHabitDone(dateStr: string, habitId: string, done: boolean): AppData {
+  const data = getStoredData()
+  setHabitDoneIn(data, dateStr, habitId, done)
+  saveData(data)
+  return data
+}
+
+/** Minutes after noon-of-the-day, so 23:00 < 00:30 < 02:00 (after-midnight times count as late) */
+function nightMinutes(time: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time)
+  if (!m) return null
+  const mins = Number(m[1]) * 60 + Number(m[2])
+  return mins < 12 * 60 ? mins + 24 * 60 : mins
+}
+
+export function sleptOnTime(sleepTime: string, target: string = DEFAULT_BEDTIME): boolean {
+  const slept = nightMinutes(sleepTime)
+  const goal = nightMinutes(target)
+  return slept !== null && goal !== null && slept <= goal
+}
+
+/**
+ * Tick commitments the journal already proves. Only ever ticks (never unticks),
+ * so a manual check-in is not undone by an unrelated journal edit.
+ */
+export function applyJournalToHabits(data: AppData, entry: JournalEntry): void {
+  const habitIds = new Set(getHabits(data).map(h => h.id))
+  const proofs: Record<string, boolean> = {
+    prayer: Object.values(entry.prayers).every(Boolean),
+    quran: entry.quranPages > 0,
+    reading: entry.pagesRead > 0,
+    workout: entry.workoutCompleted,
+    sleep: sleptOnTime(entry.sleepTime, data.bedtimeTarget || DEFAULT_BEDTIME),
+  }
+  for (const [id, proven] of Object.entries(proofs)) {
+    if (proven && habitIds.has(id) && !isHabitDone(data, entry.date, id)) {
+      setHabitDoneIn(data, entry.date, id, true)
+    }
+  }
 }
 
 export function createEmptyJournalEntry(date: string, dayNumber: number): JournalEntry {

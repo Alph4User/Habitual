@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { HabitDefinition } from '@/lib/storage'
+import { DEFAULT_HABITS, type HabitDefinition } from '@/lib/storage'
 
 interface ManageHabitsDialogProps {
   open: boolean
@@ -63,7 +63,7 @@ export function ManageHabitsDialog({ open, onOpenChange, habits, onSave }: Manag
   const add = () => {
     const label = newLabel.trim()
     if (!label) return
-    setDraft(prev => [...prev, { id: makeId(label, prev), label, icon: newIcon.trim() || '✅' }])
+    setDraft(prev => [...prev, { id: makeId(label, prev), label, icon: newIcon.trim() || '✅', kind: 'build' }])
     setNewLabel('')
     setNewIcon('')
   }
@@ -80,7 +80,7 @@ export function ManageHabitsDialog({ open, onOpenChange, habits, onSave }: Manag
         <DialogHeader>
           <DialogTitle>Manage habits</DialogTitle>
           <DialogDescription>
-            Add, rename, reorder or remove habits. Past check-ins are kept, so a removed habit's history comes back if you add it again under the same name.
+            Add, rename, reorder or remove habits. Tap Build/Quit to switch between a habit to build and one to quit. Past check-ins are kept, so a removed habit's history comes back if you add it again under the same name.
           </DialogDescription>
         </DialogHeader>
 
@@ -100,6 +100,15 @@ export function ManageHabitsDialog({ open, onOpenChange, habits, onSave }: Manag
                 onChange={e => update(i, { label: e.target.value })}
                 className="flex-1"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-16 shrink-0 px-0 text-xs"
+                onClick={() => update(i, { kind: habit.kind === 'quit' ? 'build' : 'quit' })}
+                title="Build = a good habit to do. Quit = a bad habit to stay away from (streak shows days clean)."
+              >
+                {habit.kind === 'quit' ? 'Quit' : 'Build'}
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
                 <ArrowUp className="h-4 w-4" />
               </Button>
@@ -148,11 +157,22 @@ export function ManageHabitsDialog({ open, onOpenChange, habits, onSave }: Manag
           </Button>
         </form>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              // Keep any of the user's own habits, put the 10 commitments first
+              setDraft(prev => [...DEFAULT_HABITS, ...prev.filter(h => !DEFAULT_HABITS.some(d => d.id === h.id))])
+            }}
+          >
+            Use the 10 commitments
+          </Button>
+          <div className="flex gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={save}>Save</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

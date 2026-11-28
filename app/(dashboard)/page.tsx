@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { useAppData } from '@/hooks/use-data'
+import { TodayCommitments } from '@/components/today-commitments'
 import { getDayNumber } from '@/lib/storage'
 import {
   TOTAL_DAYS,
@@ -81,7 +82,7 @@ function EmptyChart({ message }: { message: string }) {
 }
 
 export default function DashboardPage() {
-  const { data, loading } = useAppData()
+  const { data, loading, updateData } = useAppData()
 
   const stats = React.useMemo(() => {
     if (!data) return null
@@ -135,6 +136,8 @@ export default function DashboardPage() {
         <StatCard label="Habits Tracked" value={stats.completions} hint="total completions" />
         <StatCard label="Journal Entries" value={stats.entries} hint="entries written" />
       </div>
+
+      {data && <TodayCommitments data={data} onChange={updateData} />}
 
       {stats.day && (
         <Card className="border-border/50">

@@ -1,5 +1,5 @@
 import { addDays, format, startOfWeek } from 'date-fns'
-import { AppData, HabitDefinition, formatDate, getHabits, parseLocalDate } from '@/lib/storage'
+import { AppData, HabitDefinition, formatDate, getHabits, isHabitDone, parseLocalDate } from '@/lib/storage'
 
 export const TOTAL_DAYS = 180
 
@@ -121,4 +121,19 @@ export function weeklyHabitCompletion(data: AppData, weeks = 8, today: Date = ne
       percent: possible ? Math.min(100, Math.round((done / possible) * 100)) : 0,
     }
   })
+}
+
+/**
+ * Consecutive days a habit was kept, ending today. If today isn't ticked yet
+ * the streak still counts up to yesterday (the day isn't over).
+ */
+export function habitStreak(data: AppData, habitId: string, today: Date = new Date()): number {
+  let cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  if (!isHabitDone(data, formatDate(cursor), habitId)) cursor = addDays(cursor, -1)
+  let streak = 0
+  while (isHabitDone(data, formatDate(cursor), habitId) && streak < 3650) {
+    streak++
+    cursor = addDays(cursor, -1)
+  }
+  return streak
 }
